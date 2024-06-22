@@ -1,15 +1,16 @@
 import tkinter
 import tkinter.font
 
-from html_parser import HTMLParser, Text, Element
+from models import Text, Tag, ClosingTag, SelfClosingTag
 
 WIDTH, HEIGHT = 800, 600
 HSTEP, VSTEP = 13, 18
-SCROLL_STEP = 100
+# SCROLL_STEP = 100
 
 FONTS = {}
 
 def get_font(size, weight, style):
+    "Return a font object with the given attributes."
     key = (size, weight, style)
     if key not in FONTS:
         font = tkinter.font.Font(
@@ -22,8 +23,9 @@ def get_font(size, weight, style):
     return FONTS[key][0]
 
 class Layout:
-    def __init__(self, nodes):
-        self.nodes = nodes
+    "Lay out the nodes in a tree structure."
+    def __init__(self, node:Tag):
+        self.nodes = node
         self.display_list = []
         self.cursor_x = HSTEP
         self.cursor_y = VSTEP
@@ -32,9 +34,10 @@ class Layout:
         self.size = 12
         self.line = []
         self.counter = 0 
-        self.recurse(nodes)
+        self.recurse(node)
         
-    def open_tag(self, tag):
+    def open_tag(self, tag:str):
+        "Handle an opening tag."
         if tag == "i":
             self.style = 'italic'
         elif tag == "b":
@@ -43,11 +46,15 @@ class Layout:
             self.size -= 2     
         elif tag == "big":
             self.size += 4
+        # elif tag == "p":
+        #     self.flush()
+        #     self.cursor_y+=VSTEP
         elif tag == "br":
             self.flush()        
         
-    def close_tag(self, tag):
-        if tag == "i":
+    def close_tag(self, tag:str):
+        "Handle a closing tag."
+        if tag == "/i":
             self.style = 'roman'
         elif tag == "/b":
             self.weight = 'normal'
@@ -59,37 +66,29 @@ class Layout:
             self.flush()
             self.cursor_y+=VSTEP
             
-    # def recurse(self, tree):
-    #     if isinstance(tree, Text):
-    #         for word in tree.text.split():
-    #             self.word(word)
-    #     else:
-    #         self.open_tag(tree.tag)
-    #         for child in tree.children:
-    #             self.recurse(child)
-    #         self.close_tag(tree.tag)
+    def recurse(self, node:Tag):
+        "Recurse through the tree adding open and close tags as needed."
+        while node.next:
+            if isinstance(node, (Tag, SelfClosingTag)):
+                self.open_tag(node.tag)
+                if isinstance(node.text, Text):
+                    for word in node.text.text.split():
+                        self.word(word)
+            if isinstance(node, ClosingTag):
+                self.close_tag(node.tag)
+            node = node.next
 
-    def recurse(self, node):
-        print("node: ", node)
-        self.open_tag(node.tag)
-        if isinstance(node.text, Text):
-            for word in node.text.text.split():
-                self.word(word)
-        if node.next:
-            self.recurse(node.next)
-        self.close_tag(node.tag)
-        self.flush()
-                        
-    def word(self, word):
+    def word(self, word:str):
+        "Add words to the current line."
         font = get_font(self.size, self.weight, self.style)
         w = font.measure(word)
         self.line.append((self.cursor_x, word, font))
         self.cursor_x += w + font.measure(" ")
         if self.cursor_x + w > WIDTH - HSTEP:
-            print("word: ", self.line)
             self.flush()
             
     def flush(self):
+        "Flush the current line and start a new one."
         if not self.line: return
         metrics = [font.metrics() for _, _, font in self.line]
         max_ascent = max([metric["ascent"] for metric in metrics])

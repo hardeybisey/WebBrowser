@@ -6,46 +6,57 @@ from layout import Layout
 
 WIDTH, HEIGHT = 800, 600
 HSTEP, VSTEP = 13, 18
-SCROLL_STEP = 100
 FONTS = {}
 
         
 class Browser:
+    "A simple web browser."
     def __init__(self):
-        self.scroll = 0
+        self.scroll_pos = 0
         self.window = tkinter.Tk()
         self.canvas = tkinter.Canvas(
             self.window, 
             width=WIDTH,
             height=HEIGHT
         )
-        # self.scrollbar = tkinter.Scrollbar(
-        #     self.window,
-        #     orient="vertical",
-        #     command=self.canvas.yview
-        # )
-        # self.scrollbar.pack(side=tkinter.RIGHT, fill=tkinter.Y)
-        # self.window.bind("<Down>", self.scrolldown)
         self.window.bind("<MouseWheel>", self.scroll)
         self.canvas.pack(fill="both", expand=True)
-        # self.scrollbar.pack(side=tkinter.RIGHT, fill="both")
 
     def draw(self):
+        "Draw the display list."
         self.canvas.delete("all")
         for x, y, c, f in self.display_list:
-            if y > self.scroll + HEIGHT: continue
-            if y + VSTEP < self.scroll: continue
-            self.canvas.create_text(x, y - self.scroll, text=c, font=f, anchor="nw")
+            if y > self.scroll_pos + HEIGHT: continue
+            if y + VSTEP < self.scroll_pos: continue
+            self.canvas.create_text(x, y - self.scroll_pos, text=c, font=f, anchor="nw")
 
     def load(self, url):
+        "Load the given URL and display it in the window."
         body = url.request()
+        # body = """
+        # <!DOCTYPE html>
+        # <html>
+        # <head>
+        #     <title>My Page</title>
+        # </head>
+        # <body>
+        #     <div>
+        #         Hello World
+        #     </div>
+        #     <div> 
+        #         <p> <i>This is a paragraph </i></p>
+        #         <a href="https://www.google.com"> This is a link </a>
+        #     </div>
+        # </body>
+        # </html>
+        # """
         self.nodes = HTMLParser(body).parse()
         self.display_list = Layout(self.nodes).display_list
         self.draw()
     
     def scroll(self, event):
-        print("event.delta", event.delta)
-        self.scroll += event.delta
+        "Scroll through the display list."
+        self.scroll_pos += event.delta
         self.draw()
         
 
