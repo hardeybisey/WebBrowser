@@ -13,38 +13,33 @@ class HTMLParser:
     def __init__(self, body:str) -> None:
         self.body = body
         self.root = None
-        self.node_list = []
-        self.last_closed_tag = None
+        self.current_node = None
 
     def add_text(self, text):
         "Add text to the current node."
         if text.isspace(): 
             return
-        # self.implicit_tags(None)
-        parent = self.node_list[-1]
-        parent.text = Text(text)
+        self.current_node.children.append(Text(text))
 
     def add_tag(self, tag):
         "Add a tag to the current node."
+        tag, attributes = self.get_attribute(tag)
         if tag.startswith("!"):
             return
-        tag, attributes = self.get_attribute(tag)
-        parent = self.node_list[-1] if self.node_list else None
         if tag.startswith("/"):
-            node = ClosingTag(tag, attributes=attributes, prev=parent)
-            parent.next = node
-            # node.closing_tag = True
+            node = ClosingTag(tag, attributes=attributes, parent=self.current_node)
+            self.current_node.children.append(node)
+            self.current_node = self.current_node.parent
         elif tag in self.SELF_CLOSING_TAGS:
-            node = SelfClosingTag(tag, attributes=attributes, prev=parent)
-            # node.self_closing_tag = True
-            parent.next = node
+            node = SelfClosingTag(tag, attributes=attributes, parent=self.current_node)
+            self.current_node.children.append(node)
         else:
-            node = Tag(tag, attributes=attributes, prev=parent)
-            if self.root is None:
-                self.root = node
+            node = Tag(tag, attributes=attributes, parent=self.current_node)
+            if self.current_node:
+                self.current_node.children.append(node)
             else:
-                parent.next = node
-        self.node_list.append(node)
+                self.root = node
+            self.current_node = node
         # self.implicit_tags(tag)
             
     def finish(self):

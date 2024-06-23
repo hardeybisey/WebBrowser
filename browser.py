@@ -1,5 +1,5 @@
-import tkinter
-import tkinter.font
+import tkinter as tk
+import tkinter.font as tkFont
 from html_parser import HTMLParser
 from layout import Layout
 
@@ -13,14 +13,16 @@ class Browser:
     "A simple web browser."
     def __init__(self):
         self.scroll_pos = 0
-        self.window = tkinter.Tk()
-        self.canvas = tkinter.Canvas(
+        self.window = tk.Tk()
+        self.canvas = tk.Canvas(
             self.window, 
             width=WIDTH,
             height=HEIGHT
         )
+        # self.scrollbar = tk.Scrollbar(self.window, orient=tk.VERTICAL, command=self.canvas.yview)
         self.window.bind("<MouseWheel>", self.scroll)
-        self.canvas.pack(fill="both", expand=True)
+        self.canvas.pack(fill=tk.BOTH, expand=True)
+        # self.scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
 
     def draw(self):
         "Draw the display list."
@@ -50,8 +52,9 @@ class Browser:
         # </body>
         # </html>
         # """
-        self.nodes = HTMLParser(body).parse()
-        self.display_list = Layout(self.nodes).display_list
+        self.node = HTMLParser(body).parse()
+        self.document = Layout(self.node)
+        self.document.layout()
         self.draw()
     
     def scroll(self, event):

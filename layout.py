@@ -65,18 +65,19 @@ class Layout:
         elif tag == "/p":
             self.flush()
             self.cursor_y+=VSTEP
-            
-    def recurse(self, node:Tag):
+        
+    def recurse(self, node):
         "Recurse through the tree adding open and close tags as needed."
-        while node.next:
+        if isinstance(node, Text):
+            for word in node.text.split():
+                self.word(word)
+        else:
             if isinstance(node, (Tag, SelfClosingTag)):
                 self.open_tag(node.tag)
-                if isinstance(node.text, Text):
-                    for word in node.text.text.split():
-                        self.word(word)
+            for child in node.children:
+                self.recurse(child)
             if isinstance(node, ClosingTag):
                 self.close_tag(node.tag)
-            node = node.next
 
     def word(self, word:str):
         "Add words to the current line."
