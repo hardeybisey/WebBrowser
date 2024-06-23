@@ -1,7 +1,7 @@
 import tkinter as tk
 import tkinter.font as tkFont
 from html_parser import HTMLParser
-from layout import Layout
+from layout import DocumentLayout, paint_tree
 
 
 WIDTH, HEIGHT = 800, 600
@@ -27,10 +27,10 @@ class Browser:
     def draw(self):
         "Draw the display list."
         self.canvas.delete("all")
-        for x, y, c, f in self.display_list:
-            if y > self.scroll_pos + HEIGHT: continue
-            if y + VSTEP < self.scroll_pos: continue
-            self.canvas.create_text(x, y - self.scroll_pos, text=c, font=f, anchor="nw")
+        for cmd in self.display_list:
+            if cmd.top > self.scroll_pos + HEIGHT: continue
+            if cmd.bottom < self.scroll_pos: continue
+            cmd.execute(self.scroll_pos, self.canvas)
 
     def load(self, url):
         "Load the given URL and display it in the window."
@@ -53,8 +53,10 @@ class Browser:
         # </html>
         # """
         self.node = HTMLParser(body).parse()
-        self.document = Layout(self.node)
+        self.document = DocumentLayout(self.node)
         self.document.layout()
+        self.display_list = []
+        paint_tree(self.document, self.display_list)
         self.draw()
     
     def scroll(self, event):
