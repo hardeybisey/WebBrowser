@@ -1,5 +1,15 @@
-from models import Text, Tag, SelfClosingTag, ClosingTag
+from models import Text, Tag, ClosingTag
 
+
+conversion = {
+    "&lt;": "<",
+    "&gt;": ">",
+    "&amp;": "&",
+    "&quot;": '"',
+    "&apos;": "'",
+    "&euro;": "€",
+    "&pound;": "£",
+}
 class HTMLParser:
     SELF_CLOSING_TAGS = [
         "area", "base", "br", "col", "embed", "hr", "img", "input",
@@ -19,6 +29,9 @@ class HTMLParser:
         "Add text to the current node."
         if text.isspace(): 
             return
+        for key, value in conversion.items():
+            if key in text:
+                text = text.replace(key, value) 
         self.current_node.children.append(Text(text))
 
     def add_tag(self, tag):
@@ -31,7 +44,7 @@ class HTMLParser:
             self.current_node.children.append(node)
             self.current_node = self.current_node.parent
         elif tag in self.SELF_CLOSING_TAGS:
-            node = SelfClosingTag(tag, attributes=attributes, parent=self.current_node)
+            node = Tag(tag, attributes=attributes, parent=self.current_node)
             self.current_node.children.append(node)
         else:
             node = Tag(tag, attributes=attributes, parent=self.current_node)

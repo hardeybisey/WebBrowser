@@ -2,6 +2,7 @@ import tkinter as tk
 import tkinter.font as tkFont
 from html_parser import HTMLParser
 from layout import DocumentLayout, paint_tree
+from css_parser import style
 
 
 WIDTH, HEIGHT = 800, 600
@@ -13,6 +14,8 @@ class Browser:
     "A simple web browser."
     def __init__(self):
         self.scroll_pos = 0
+        self.width = WIDTH
+        self.height = HEIGHT
         self.window = tk.Tk()
         self.canvas = tk.Canvas(
             self.window, 
@@ -21,6 +24,7 @@ class Browser:
         )
         # self.scrollbar = tk.Scrollbar(self.window, orient=tk.VERTICAL, command=self.canvas.yview)
         self.window.bind("<MouseWheel>", self.scroll)
+        # self.window.bind("<Configure>", self.resize)
         self.canvas.pack(fill=tk.BOTH, expand=True)
         # self.scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
 
@@ -53,15 +57,31 @@ class Browser:
         # </html>
         # """
         self.node = HTMLParser(body).parse()
+        style(self.node)
         self.document = DocumentLayout(self.node)
         self.document.layout()
         self.display_list = []
         paint_tree(self.document, self.display_list)
+        # for i in self.display_list[-20:]:
+        #     print(i)
         self.draw()
     
     def scroll(self, event):
         "Scroll through the display list."
-        self.scroll_pos += event.delta
+        new_scroll_pos = self.scroll_pos + event.delta
+        if new_scroll_pos < 0:
+            self.scroll_pos =0 
+        elif new_scroll_pos > self.document.height - self.height:
+            self.scroll_pos = self.document.height - self.height
+        else:
+            self.scroll_pos = new_scroll_pos
         self.draw()
         
-
+    # def resize(self, event):
+    #     print(event.__dict__)
+    #     self.width = event.width
+    #     self.height = event.height
+    #     self.display_list = []
+    #     self.document.layout()
+        # paint_tree(self.document, self.display_list)
+        # self.draw()

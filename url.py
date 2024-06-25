@@ -1,21 +1,21 @@
 import socket
 import ssl
+from abc import ABC, abstractmethod
+import os
+from pathlib import Path
 
-class URL:
-    scheme_mapping = {
-        "http": 80,
-        "https": 443,
-    }
-    def __init__(self, url):
-        self.scheme, url = url.split("://", 1)
-        assert self.scheme in ("http", "https")
-        self.host, url = url.split("/", 1)
-        self.path = "/" + url
-        self.port = self.scheme_mapping[self.scheme]
-        if ":" in self.host:
-            self.host, port = self.host.split(":", 1)
-            self.port = int(port)
-    
+class Base(ABC):
+    @abstractmethod
+    def request(self):
+        pass
+
+class WebURL(Base):
+    def __init__(self, host, path, port=80, scheme="http"):
+        self.host = host
+        self.path = path
+        self.port = port
+        self.scheme = scheme
+
     def request(self):
         s = socket.socket(
             family=socket.AF_INET,
@@ -29,13 +29,14 @@ class URL:
         
         request = f"GET {self.path} HTTP/1.0\r\n"
         request +=f"Host: {self.host}\r\n"
+        request += f"Connection: close\r\n"
+        request += f"User-Agent: TKBrowserv\r\n"
         request += "\r\n"
         s.send(request.encode("utf8"))
         
         response = s.makefile("r", encoding="utf8", newline="\r\n")
-        statusline = response.readline()
-        version, status, explanation = statusline.split(" ", 2)
-        
+        self.statusline = response.readline()
+        # version, status, explanation = self.statusline.split(" ", 2)
         response_headers = {}
         while True:
             line = response.readline()
@@ -50,3 +51,84 @@ class URL:
         content = response.read()
         s.close()
         return content
+    
+class FileURL(Base):
+    def __init__(self, path):
+        self.path = path
+    
+    def request(self):
+        dir_list = "\n".join(f"<li>{d}</li>" for d in os.listdir())
+        content = f"""
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <title>Sample HTML</title>
+            <meta charset="UTF-8">
+            <link rel="stylesheet" href="style.css" />
+        </head>
+        <body>
+            <div> File List </div>
+            <ul>
+            {dir_list}
+            </ul>
+        </body>
+        </html>
+        """
+        return content 
+    
+class URL:
+    scheme_mapping = {
+        "http": 80,
+        "https": 443,
+    }
+    def __init__(self, url):
+        self.scheme, url = url.split("://", 1)
+        if self.scheme in ("http", "https"):
+            parts = url.split("/", 1)
+            self.host = parts[0]
+            self.path = "/" + parts[1] if len(parts) > 1 else "/"
+            self.port = self.scheme_mapping.get(self.scheme, 80)
+            if ":" in self.host:
+                self.host, port = self.host.split(":", 1)
+                self.port = int(port)
+        elif self.scheme == "file":
+            assert Path(url).exists() and Path(url).is_dir()
+            self.path = url
+            self.host = "localhost"
+        # elif self.scheme == "raw":
+        #     self.host = "localhost"
+        #     self.path = url
+
+    def request(self):
+        if self.scheme in ("http", "https"):
+            web_url = WebURL(self.host, self.path, self.port, self.scheme)
+            return web_url.request()
+        elif self.scheme == "file":
+            file_url = FileURL(self.path)
+            return file_url.request()
+        else:
+            raise ValueError(f"Unsupported URL scheme: {self.scheme}")
+        
+        
+# class RawHtmlURL(Base):
+#     def __init__(self, path):
+#         self.path = path
+    
+#     def request(self):
+#         content = f"""
+#         <!DOCTYPE html>
+#         <html>
+#         <head>
+#             <title>Sample HTML</title>
+#             <meta charset="UTF-8">
+#             <link rel="stylesheet" href="style.css" />
+#         </head>
+#         <body>
+#             <div> Raw HTML </div>
+#             <pre>
+#             {self.path}
+#             </pre>
+#         </body>
+#         </html>
+#         """
+#         return content

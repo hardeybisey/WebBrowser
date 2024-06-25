@@ -1,8 +1,7 @@
 import tkinter
 import tkinter.font
 
-from models import Text, Tag, ClosingTag, SelfClosingTag
-
+from models import Text, Tag, ClosingTag
 
 BLOCK_ELEMENTS = [
     "html", "body", "article", "section", "nav", "aside",
@@ -83,6 +82,9 @@ class BlockLayout:
     def layout_block(self):
         previous = None
         for child in self.node.children:
+            # exclude the head from being rendered in the UI to mimic a browser behavior
+            if isinstance(child, Tag) and child.tag == "head":
+                continue
             current = BlockLayout(node=child, parent=self, previous=previous)
             self.children.append(current)
             previous = current
@@ -90,7 +92,7 @@ class BlockLayout:
     def _layout_mode(self):
         if isinstance(self.node, Text):
             self.layout_mode = "inline"
-        elif any([isinstance(child, (Tag,ClosingTag)) and child.tag in BLOCK_ELEMENTS for child in self.node.children]):
+        elif any([isinstance(child, Tag) and child.tag in BLOCK_ELEMENTS for child in self.node.children]):
             self.layout_mode= "block"
         elif self.node.children:
             self.layout_mode = "inline"
@@ -107,9 +109,9 @@ class BlockLayout:
             self.size -= 2     
         elif tag == "big":
             self.size += 4
-        # elif tag == "p":
-        #     self.flush()
-        #     self.cursor_y+=VSTEP
+        elif tag == "p":
+            self.flush()
+            self.cursor_y+=VSTEP
         elif tag == "br":
             self.flush()        
         
@@ -133,7 +135,7 @@ class BlockLayout:
             for word in node.text.split():
                 self.word(word)
         else:
-            if isinstance(node, (Tag, SelfClosingTag)):
+            if isinstance(node, Tag):
                 self.open_tag(node.tag)
             for child in node.children:
                 self.recurse(child)
@@ -146,6 +148,9 @@ class BlockLayout:
         w = font.measure(word)
         if self.cursor_x + w > self.width:
             self.flush()
+        # if word == "\n":
+        #     self.flush()
+        #     return
         self.line.append((self.cursor_x, word, font))
         self.cursor_x += w + font.measure(" ")
             
@@ -170,9 +175,10 @@ class BlockLayout:
             for x, y, text, font in self.display_list:
                 cmds.append(DrawText(x, y, text, font))
             
-        if isinstance(self.node, (Tag, SelfClosingTag)) and self.node.tag == "pre":
+        if isinstance(self.node, Tag):
+            bgcolor = self.node.style.get("background-color", "")
             x2, y2 = self.x + self.width, self.y + self.height
-            cmds.append(DrawRect(self.x, self.y, x2, y2, "gray"))
+            cmds.append(DrawRect(self.x, self.y, x2, y2, bgcolor))
         return cmds
         
 class DocumentLayout:
@@ -214,6 +220,10 @@ class DrawText:
             font=self.font, 
             anchor="nw"
         )
+        
+        
+    def __repr__(self):
+        return f"DrawText({self.text})"
 class DrawRect:
     def __init__(self, x1, y1, x2, y2, color):
         self.top = y1
