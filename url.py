@@ -8,6 +8,21 @@ class Base(ABC):
     @abstractmethod
     def request(self):
         pass
+    
+    def resolve(self, url):
+        "Resolve a relative URL to an absolute one."
+        if "://" in url: return  self.__class__(url)
+        if not url.startswith("/"):
+            _dir, _ = self.path.rsplit("/", 1)
+            while url.startswith("../"):
+                _, url = url.split("/", 1)
+                if "/" in _dir:
+                    _dir, _ = _dir.rsplit("/", 1)
+            url = f"{_dir}/{url}"
+        if url.startswith("//"):
+            self.__class__(f"{self.scheme}:{url}")
+        else:
+            return self.__class__(f"{self.scheme}://{self.host}:{self.port}{url}")
 
 class WebURL(Base):
     def __init__(self, host, path, port=80, scheme="http"):
@@ -76,7 +91,7 @@ class FileURL(Base):
         """
         return content 
     
-class URL:
+class URL(Base):
     scheme_mapping = {
         "http": 80,
         "https": 443,

@@ -1,11 +1,13 @@
 import tkinter as tk
-import tkinter.font as tkFont
 from html_parser import HTMLParser
 from layout import DocumentLayout, paint_tree
-from css_parser import style
+from css_parser import style, CSSParser
+from models import Tag
+from utils import tree_to_list
 
-
-WIDTH, HEIGHT = 800, 600
+DEFAULT_STYLE_SHEET = CSSParser(open("static/browser.css").read()).parse()
+print(DEFAULT_STYLE_SHEET)
+WIDTH, HEIGHT = 800, 700
 HSTEP, VSTEP = 13, 18
 FONTS = {}
 
@@ -16,17 +18,29 @@ class Browser:
         self.scroll_pos = 0
         self.width = WIDTH
         self.height = HEIGHT
-        self.window = tk.Tk()
+        self.root = tk.Tk()
+        self.root.title("Dummy Browser")
+        
+        self.hscrollbar = tk.Scrollbar(self.root, orient=tk.VERTICAL)
+        self.hscrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+
+        self.vscrollbar = tk.Scrollbar(self.root, orient=tk.HORIZONTAL)
+        self.vscrollbar.pack(side=tk.BOTTOM, fill=tk.X)
+
         self.canvas = tk.Canvas(
-            self.window, 
+            self.root, 
             width=WIDTH,
-            height=HEIGHT
+            height=HEIGHT,
+            bg="white",
+            yscrollcommand=self.hscrollbar.set,
+            xscrollcommand=self.vscrollbar.set,
         )
-        # self.scrollbar = tk.Scrollbar(self.window, orient=tk.VERTICAL, command=self.canvas.yview)
-        self.window.bind("<MouseWheel>", self.scroll)
+        self.canvas.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        
+        self.hscrollbar.config(command=self.canvas.yview)
+        self.vscrollbar.config(command=self.canvas.xview)
+        self.root.bind("<MouseWheel>", self.scroll)
         # self.window.bind("<Configure>", self.resize)
-        self.canvas.pack(fill=tk.BOTH, expand=True)
-        # self.scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
 
     def draw(self):
         "Draw the display list."
@@ -46,6 +60,7 @@ class Browser:
         #     <title>My Page</title>
         # </head>
         # <body>
+        # <style background-color: blue; color: white; font-size: 16px;>
         #     <div>
         #         Hello World
         #     </div>
@@ -56,16 +71,24 @@ class Browser:
         # </body>
         # </html>
         # """
+        rules = DEFAULT_STYLE_SHEET.copy()
         self.node = HTMLParser(body).parse()
-        style(self.node)
+        links = [node.attributes["href"] for node in tree_to_list(self.node, []) if isinstance(node, Tag) and "href" in node.attributes and node.attributes.get("rel") == "stylesheet"]
+        for link in links:
+            style_url = url.resolve(link)
+            try:
+                body = style_url.request()
+            except Exception:
+                continue
+            rules.extend(CSSParser(body).parse())
+        style(self.node, sorted(rules, key=lambda x: x[0].priority))
         self.document = DocumentLayout(self.node)
         self.document.layout()
         self.display_list = []
         paint_tree(self.document, self.display_list)
-        # for i in self.display_list[-20:]:
-        #     print(i)
         self.draw()
-    
+        self.canvas.config(scrollregion=self.canvas.bbox("all"))
+        
     def scroll(self, event):
         "Scroll through the display list."
         new_scroll_pos = self.scroll_pos + event.delta

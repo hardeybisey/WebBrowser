@@ -1,4 +1,11 @@
-from html_parser import Tag
+from models import Tag
+
+INHERITED_PROPERTIES = {
+    "font-size": "16px",
+    "font-style": "normal",
+    "font-weight": "normal",
+    "color": "black",
+}
 
 class CSSParser:
     def __init__(self, text):
@@ -37,21 +44,21 @@ class CSSParser:
         self.literal(":")
         self.white_space()
         value = self.word()
-        return key, value
+        return key.casefold(), value
     
     def body(self):
         # parse the whole attributes as a block of text and store them
         #  as key value pairs
         pairs = {}
-        while self.index < len(self.text):
+        while self.index < len(self.text) and self.text[self.index] != "}":
             try:
                 key, value = self.pair()
-                pairs[key] = value
+                pairs[key.casefold()] = value
                 self.white_space()
                 self.literal(";")
                 self.white_space()
             except Exception:
-                why = self.ignore_until([";"])
+                why = self.ignore_until([";", "}"])
                 if why == ";":
                     self.literal(";")
                     self.white_space()
@@ -69,54 +76,88 @@ class CSSParser:
                 self.index += 1
         return None
     
-    # def selector(self):
-    #     out = TagSelector(self.word())
-    #     self.white_space()
-    #     while self.index < len(self.text) and self.text[self.index] != "{":
-    #         tag = self.word()
-    #         descendant = TagSelector(tag)
-    #         out = DescendantSelector(out, descendant)
-    #         self.white_space()
-    #     return out
+    def selector(self):
+        out = TagSelector(self.word())
+        self.white_space()
+        while self.index < len(self.text) and self.text[self.index] != "{":
+            tag = self.word()
+            descendant = TagSelector(tag)
+            out = DescendantSelector(out, descendant)
+            self.white_space()
+        return out
+    
+    def parse(self):
+        rules = []
+        while self.index < len(self.text):
+            try:
+                self.white_space()
+                selector = self.selector()
+                self.literal("{")
+                self.white_space()
+                body = self.body()
+                self.literal("}")
+                rules.append((selector, body))
+            except Exception:
+                why = self.ignore_until(["}"])
+                if why == "}":
+                    self.literal("}")
+                    self.white_space()
+                else:
+                    break
+        return rules
 
-    
-    
-def style(node):
+def style(node, rules):
     # recursively parse the a node to get all the style attribute
     # of the node and its children and store it as the node attribute
     node.style = {}
+    for key, default_value in INHERITED_PROPERTIES.items():
+        if node.parent:
+            node.style[key] = node.parent.style[key]
+        else:
+            node.style[key] = default_value
+    for selector, body in rules:
+        if not selector.matches(node): continue
+        for key, value in body.items():
+            node.style[key] = value
     if isinstance(node, Tag) and "style" in node.attributes:
         pairs = CSSParser(node.attributes["style"]).body()
         for key, value in pairs.items():
             node.style[key] = value
+    if node.style["font-size"].endswith("%"):
+        if node.parent:
+            parent_font_size = node.parent.style["font-size"]
+        else:
+            parent_font_size = INHERITED_PROPERTIES["font-size"]
+        node_pct = float(node.style["font-size"][:-1]) / 100
+        parent_px = float(parent_font_size[:-2])
+        node.style["font-size"] = f"{node_pct * parent_px}px"
     for child in node.children:
-        style(child)
-        
-        
+        style(child, rules)
+
 class TagSelector:
-    def __init__(self, tag):
+    def __init__(self, tag, priority=1):
         self.tag = tag
-        
+        self.priority = priority
+
     def matches(self, node):
         return isinstance(node, Tag) and node.tag == self.tag
 
     def __repr__(self) -> str:
-        return f"{self.tag}"
+        return f"TagSelector(tag={self.tag}, priority={self.priority})"
 
 class DescendantSelector:
     def __init__(self, ancestor, descendant):
         self.ancestor = ancestor
         self.descendant = descendant
-        
-    
-    def __repr__(self) -> str:
-        return f"{self.ancestor} {self.descendant}"
-        
+        self.priority =  ancestor.priority + descendant.priority
+
     def matches(self, node):
-        if not isinstance(node, Tag):
-            return False
         if not self.descendant.matches(node): return False
         while node.parent:
             if self.ancestor.matches(node.parent): return True
             node = node.parent
         return False
+    
+    def __repr__(self) -> str:
+        return f"DescendantSelector(ancestor={self.ancestor}, descendant={self.descendant}, priority={self.priority})"
+        

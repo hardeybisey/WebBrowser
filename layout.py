@@ -1,7 +1,7 @@
+from typing import Union
 import tkinter
 import tkinter.font
-
-from models import Text, Tag, ClosingTag
+from models import Text, Tag
 
 BLOCK_ELEMENTS = [
     "html", "body", "article", "section", "nav", "aside",
@@ -49,7 +49,7 @@ class BlockLayout:
         self._layout_mode()
 
     def __repr__(self):
-        return "BlockLayout[{}]:(layout={},x={},y={},height={},width={})".format(self.node,self.layout_mode,self.x,self.y,self.height,self.width)
+        return f"BlockLayout[{self.node}]:(layout={self.layout_mode},x={self.x},y={self.y},height={self.height},width={self.width})"
 
     def layout(self):
         self.x = self.parent.x
@@ -98,72 +98,53 @@ class BlockLayout:
             self.layout_mode = "inline"
         else:
             self.layout_mode = "block"
-        
-    def open_tag(self, tag:str):
-        "Handle an opening tag."
-        if tag == "i":
-            self.style = 'italic'
-        elif tag == "b":
-            self.weight = 'bold'
-        elif tag == "small":
-            self.size -= 2     
-        elif tag == "big":
-            self.size += 4
-        elif tag == "p":
-            self.flush()
-            self.cursor_y+=VSTEP
-        elif tag == "br":
-            self.flush()        
-        
-    def close_tag(self, tag:str):
-        "Handle a closing tag."
-        if tag == "/i":
-            self.style = 'roman'
-        elif tag == "/b":
-            self.weight = 'normal'
-        elif tag == "/small":
-            self.size += 2
-        elif tag == "/big":
-            self.size -= 4
-        elif tag == "/p":
-            self.flush()
-            self.cursor_y+=VSTEP
-        
-    def recurse(self, node):
+
+    def recurse(self, node:Union[Tag,Text]):
         "Recurse through the tree adding open and close tags as needed."
         if isinstance(node, Text):
             for word in node.text.split():
-                self.word(word)
+                self.word(node, word)
         else:
-            if isinstance(node, Tag):
-                self.open_tag(node.tag)
+            # print(node)
+            # if isinstance(node, Tag):
+            #     self.open_tag(node.tag)
+            if node.tag in ["br", "p"]:
+                self.flush()
+            if node.tag == "/p":
+                self.flush()
+                self.cursor_y += VSTEP
             for child in node.children:
                 self.recurse(child)
-            if isinstance(node, ClosingTag):
-                self.close_tag(node.tag)
+            # if isinstance(node, ClosingTag):
+            #     self.close_tag(node.tag)
 
-    def word(self, word:str):
+    def word(self, node:Union[Tag,Text] ,word:str):
         "Add words to the current line."
-        font = get_font(self.size, self.weight, self.style)
+        weight = node.style["font-weight"]
+        style = node.style["font-style"]
+        if style == "normal": style = "roman"
+        size = int(float(node.style["font-size"][:-2]) * 0.75)
+        font = get_font(size, weight, style)
         w = font.measure(word)
         if self.cursor_x + w > self.width:
             self.flush()
         # if word == "\n":
         #     self.flush()
         #     return
-        self.line.append((self.cursor_x, word, font))
+        color = node.style["color"]
+        self.line.append((self.cursor_x, word, font, color))
         self.cursor_x += w + font.measure(" ")
             
     def flush(self):
         "Flush the current line and start a new one."
         if not self.line: return
-        metrics = [font.metrics() for _, _, font in self.line]
+        metrics = [font.metrics() for _, _, font, _ in self.line]
         max_ascent = max([metric["ascent"] for metric in metrics])
         baseline = self.cursor_y + 1.25 * max_ascent
-        for rel_x, word, font in self.line:
+        for rel_x, word, font, color in self.line:
             x = self.x + rel_x
             y = self.y + baseline - font.metrics("ascent")
-            self.display_list.append((x, y, word, font))
+            self.display_list.append((x, y, word, font, color))
         self.cursor_x = 0
         self.line = []
         max_descent = max([metric["descent"] for metric in metrics])
@@ -172,15 +153,46 @@ class BlockLayout:
     def paint(self):
         cmds = []
         if self.layout_mode == "inline":
-            for x, y, text, font in self.display_list:
-                cmds.append(DrawText(x, y, text, font))
+            for x, y, text, font, color in self.display_list:
+                # print(x, y, text, font, color)
+                cmds.append(DrawText(x, y, text, font, color))
             
         if isinstance(self.node, Tag):
-            bgcolor = self.node.style.get("background-color", "")
+            bgcolor = self.node.style.get("background-color")
             x2, y2 = self.x + self.width, self.y + self.height
             cmds.append(DrawRect(self.x, self.y, x2, y2, bgcolor))
         return cmds
+
+    # def open_tag(self, tag:str):
+    #     "Handle an opening tag."
+    #     if tag == "i":
+    #         self.style = 'italic'
+    #     elif tag == "b":
+    #         self.weight = 'bold'
+    #     elif tag == "small":
+    #         self.size -= 2     
+    #     elif tag == "big":
+    #         self.size += 4
+    #     elif tag == "p":
+    #         self.flush()
+    #         self.cursor_y+=VSTEP
+    #     elif tag == "br":
+    #         self.flush()        
         
+    # def close_tag(self, tag:str):
+    #     "Handle a closing tag."
+    #     if tag == "/i":
+    #         self.style = 'roman'
+    #     elif tag == "/b":
+    #         self.weight = 'normal'
+    #     elif tag == "/small":
+    #         self.size += 2
+    #     elif tag == "/big":
+    #         self.size -= 4
+    #     elif tag == "/p":
+    #         self.flush()
+    #         self.cursor_y+=VSTEP
+               
 class DocumentLayout:
     def __init__(self, node):
         self.node = node
@@ -201,16 +213,16 @@ class DocumentLayout:
         return []
     
     def __repr__(self):
-        return "DocumentLayout[{}]:(x={},y={},height={},width={})".format(self.node,self.x,self.y,self.height,self.width)
-
+        return f"DocumentLayout[{self.node}]:(x={self.x},y={self.y},height={self.height},width={self.width})"
 
 class DrawText:
-    def __init__(self, x1, y1, text, font):
+    def __init__(self, x1, y1, text, font, color):
         self.top = y1
         self.left = x1
         self.text = text
         self.font = font
         self.bottom = y1 + font.metrics("linespace")
+        self.color = color
     
     def execute(self, scroll, canvas):
         canvas.create_text(
@@ -218,12 +230,12 @@ class DrawText:
             self.top - scroll, 
             text=self.text, 
             font=self.font, 
-            anchor="nw"
+            anchor="nw",
+            fill=self.color
         )
-        
-        
+ 
     def __repr__(self):
-        return f"DrawText({self.text})"
+        return f"DrawText(x1={self.text}, y1={self.top}, text={self.text}, font={self.font}, color={self.color})"
 class DrawRect:
     def __init__(self, x1, y1, x2, y2, color):
         self.top = y1

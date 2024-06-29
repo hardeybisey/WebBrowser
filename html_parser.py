@@ -1,4 +1,4 @@
-from models import Text, Tag, ClosingTag
+from models import Text, OpenTag, CloseTag
 
 
 conversion = {
@@ -20,6 +20,7 @@ class HTMLParser:
         "base", "basefont", "bgsound", "noscript",
         "link", "meta", "title", "style", "script",
     ]
+    
     def __init__(self, body:str) -> None:
         self.body = body
         self.root = None
@@ -32,7 +33,7 @@ class HTMLParser:
         for key, value in conversion.items():
             if key in text:
                 text = text.replace(key, value) 
-        self.current_node.children.append(Text(text))
+        self.current_node.children.append(Text(text, parent=self.current_node))
 
     def add_tag(self, tag):
         "Add a tag to the current node."
@@ -40,14 +41,14 @@ class HTMLParser:
         if tag.startswith("!"):
             return
         if tag.startswith("/"):
-            node = ClosingTag(tag, attributes=attributes, parent=self.current_node)
+            node = CloseTag(tag, attributes=attributes, parent=self.current_node)
             self.current_node.children.append(node)
             self.current_node = self.current_node.parent
         elif tag in self.SELF_CLOSING_TAGS:
-            node = Tag(tag, attributes=attributes, parent=self.current_node)
+            node = OpenTag(tag, attributes=attributes, parent=self.current_node)
             self.current_node.children.append(node)
         else:
-            node = Tag(tag, attributes=attributes, parent=self.current_node)
+            node = OpenTag(tag, attributes=attributes, parent=self.current_node)
             if self.current_node:
                 self.current_node.children.append(node)
             else:
